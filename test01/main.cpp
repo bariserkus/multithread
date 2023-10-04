@@ -1,39 +1,46 @@
-// spinLockSleep.cpp
+// conditionVariable.cpp
 
 #include <iostream>
-#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
-class Spinlock{
-    std::atomic_flag flag;
-public:
-    Spinlock(): flag(ATOMIC_FLAG_INIT){}
+std::mutex mutex_;
+std::condition_variable condVar;
 
-    void lock(){
-        while( flag.test_and_set() );
-    }
+bool dataReady{false};
 
-    void unlock(){
-        flag.clear();
-    }
-};
-
-Spinlock spin;
-
-void workOnResource(){
-    spin.lock();
-    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    spin.unlock();
-    std::cout << "Work done" << std::endl;
+void doTheWork(){
+    std::cout << "Processing shared data." << std::endl;
 }
 
+void waitingForWork(){
+    std::cout << "Worker: Waiting for work." << std::endl;
+    std::unique_lock<std::mutex> lck(mutex_);
+    condVar.wait(lck, []{ return dataReady; });
+    doTheWork();
+    std::cout << "Work done." << std::endl;
+}
+
+void setDataReady(){
+    {
+        std::lock_guard<std::mutex> lck(mutex_);
+        dataReady = true;
+    }
+    std::cout << "Sender: Data is ready."  << std::endl;
+    condVar.notify_one();
+}
 
 int main(){
 
-    std::thread t(workOnResource);
-    std::thread t2(workOnResource);
+    std::cout << std::endl;
 
-    t.join();
+    std::thread t1(waitingForWork);
+    std::thread t2(setDataReady);
+
+    t1.join();
     t2.join();
+
+    std::cout << std::endl;
 
 }
