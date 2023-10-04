@@ -7,7 +7,7 @@ class Spinlock{
     std::atomic_flag flag;
 public:
     Spinlock(): flag(ATOMIC_FLAG_INIT){
-        //std::cout << ATOMIC_FLAG_INIT<< endl;
+        std::cout << ATOMIC_FLAG_INIT<< std::endl;
     }
 
     void lock(){
