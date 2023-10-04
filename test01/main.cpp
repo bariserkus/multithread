@@ -1,16 +1,32 @@
-// mutex.cpp
+// spinLockSleep.cpp
+
 #include <iostream>
-#include <mutex>
+#include <atomic>
 #include <thread>
 
-std::mutex mut;
+class Spinlock{
+    std::atomic_flag flag;
+public:
+    Spinlock(): flag(ATOMIC_FLAG_INIT){}
+
+    void lock(){
+        while( flag.test_and_set() );
+    }
+
+    void unlock(){
+        flag.clear();
+    }
+};
+
+Spinlock spin;
 
 void workOnResource(){
-    mut.lock();
+    spin.lock();
     std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    mut.unlock();
+    spin.unlock();
     std::cout << "Work done" << std::endl;
 }
+
 
 int main(){
 
