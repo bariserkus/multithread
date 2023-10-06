@@ -1,45 +1,69 @@
-// conditionVariable.cpp
+// packagedTask.cpp
 
+#include <utility>
+#include <future>
 #include <iostream>
-#include <condition_variable>
-#include <mutex>
 #include <thread>
+#include <deque>
 
-std::mutex mutex_;
-std::condition_variable condVar;
-
-bool dataReady{false};
-
-void doTheWork(){
-    std::cout << "Processing shared data." << std::endl;
-}
-
-void waitingForWork(){
-    std::cout << "Worker: Waiting for work." << std::endl;
-    std::unique_lock<std::mutex> lck(mutex_);
-    condVar.wait(lck, []{ return dataReady; });
-    doTheWork();
-    std::cout << "Work done." << std::endl;
-}
-
-void setDataReady(){
-    {
-        std::lock_guard<std::mutex> lck(mutex_);
-        dataReady = true;
+class SumUp{
+public:
+    int operator()(int beg, int end){
+        long long int sum{0};
+        for (int i = beg; i < end; ++i ) sum += i;
+        return sum;
     }
-    std::cout << "Sender: Data is ready."  << std::endl;
-    condVar.notify_one();
-}
+};
 
 int main(){
 
     std::cout << std::endl;
 
-    std::thread t1(waitingForWork);
-    std::thread t2(setDataReady);
+    SumUp sumUp1;
+    SumUp sumUp2;
+    SumUp sumUp3;
+    SumUp sumUp4;
 
-    t1.join();
-    t2.join();
+    // wrap the tasks
+    std::packaged_task<int(int, int)> sumTask1(sumUp1);
+    std::packaged_task<int(int, int)> sumTask2(sumUp2);
+    std::packaged_task<int(int, int)> sumTask3(sumUp3);
+    std::packaged_task<int(int, int)> sumTask4(sumUp4);
+
+    // create the futures
+    std::future<int> sumResult1 = sumTask1.get_future();
+    //std::future<int> sumResult2 = sumTask2.get_future();
+    auto sumResult2 = sumTask2.get_future();
+    std::future<int> sumResult3 = sumTask3.get_future();
+    //std::future<int> sumResult4 = sumTask4.get_future();
+    auto sumResult4 = sumTask4.get_future();
+
+    // push the tasks on the container
+    std::deque<std::packaged_task<int(int,int)>> allTasks;
+    allTasks.push_back(std::move(sumTask1));
+    allTasks.push_back(std::move(sumTask2));
+    allTasks.push_back(std::move(sumTask3));
+    allTasks.push_back(std::move(sumTask4));
+
+    int begin{1};
+    int increment{2500};
+    int end = begin + increment;
+
+    // perform each calculation in a separate thread
+    while (not allTasks.empty()){
+        std::packaged_task<int(int, int)> myTask = std::move(allTasks.front());
+        allTasks.pop_front();
+        std::thread sumThread(std::move(myTask), begin, end);
+        begin = end;
+        end += increment;
+        sumThread.detach();
+    }
+
+    // pick up the results
+    auto sum = sumResult1.get() + sumResult2.get() +
+               sumResult3.get() + sumResult4.get();
+
+    std::cout << "sum of 0 .. 10000 = " << sum << std::endl;
 
     std::cout << std::endl;
 
